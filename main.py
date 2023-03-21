@@ -12,28 +12,6 @@ pygame.init()
 
 FPS = 5
 
-# +--------------------------------------------------------------------+
-# |        [1: up]                                                     |
-# | [0: left] O [2: right]                                             |
-# |       [3: down]                                                    |
-# |                                                                    |
-# | Actions: [0: Turn Left] [1: Straight] [2: Turn Right]              |
-# |                                                                    |
-# | if action is 0, reduce the number that represents the direction.   |
-# |                                                                    |
-# | Current direction: 1 (up)                                          |
-# | current action: 0 (turn left)                                      |
-# | New direction: 1 - 1 = 0 (left)                                    |
-# |                                                                    |
-# | if action is 2, increase the number that represents the direction. |
-# |                                                                    |
-# | Current direction: 1 (up)                                          |
-# | current action: 2 (turn right)                                     |
-# | New direction: 1 + 1 = 2 (right)                                   |
-# +--------------------------------------------------------------------+
-
-# If direction is 0 and the action is also 0, then new direction will be 0 - 1 = -1.
-# But it need to be 3. To fix this, I created a function named limit.
 def limit(value, minimum=0, maximum=3):
     if value > maximum:
         return minimum
@@ -42,14 +20,13 @@ def limit(value, minimum=0, maximum=3):
     else:
         return value
 
-# new_row = old_row + velocity[new_direction]['y']
-# new_column = old_column + velocity[new_direction]['x']
+# 0: left, 1: up, 2: right, 3: down.
 velocity = {0: {'x': -1,'y': 0},
             1: {'x': 0, 'y': -1},
             2: {'x': 1, 'y': 0},
             3: {'x': 0, 'y': 1}}
 
-# 0: empty, 1: wall, 2: apple, 3: snake.
+# 0: empty, 1: wall, 2: apple, 3: snake tail, 4: snake head.
 color = {0: (0, 200, 100),
          1: (0, 0, 0),
          2: (200, 0, 0),
@@ -84,7 +61,6 @@ def correct_moves():
 def check_nearby_cells():
     # Check nearby cells if there is an obstacle or tail.
     row, column = snake.row, snake.column
-    print(row, column, map.width, map.height)
     if row == 0:
         _0_ = 1
     else:
@@ -112,32 +88,6 @@ class Cell:
     def __init__(self, width, height):
         self.width = width
         self.height = height
-
-
-class Text:
-    def __init__(self, base_string, function, color=(255, 0, 0)):
-        # base_string can be "FPS: " or "Score: " to represent the remaining part.
-        self.base_string = base_string
-        self.color = color
-        # function is used to get the remaining part (It can be fps value or score etc.) of the string.
-        # So {base_string + remaining} will be shown on the screen.
-        self.function = function
-        # Size of the font can be changed.
-        self.font = pygame.font.SysFont("Helvetica", 32)
-
-    def show(self, display, position, string=None):
-        # If a string is given, use that. Otherwise, use the base_string and add the remaining part to it.
-        if string is None:
-            string = self.base_string
-            remaining = self.function()
-            # Check if the type of the remaining part is str. If not, Convert it to the str type before merging strings.
-            if type(remaining) is str:
-                string += remaining
-            else:
-                string += str(remaining)
-        text = self.font.render(string, True, self.color)
-        display.blit(text, position)
-
 
 class Screen:
     def __init__(self, background_color=(100, 100, 100), resolution=(1000, 750)):
@@ -181,7 +131,6 @@ class Screen:
     class FPS:
         def __init__(self):
             self.clock = pygame.time.Clock()
-            self.text = Text(base_string="FPS: ", function=self.get)
 
         def set(self, value):
             self.clock.tick(value)
@@ -266,7 +215,7 @@ class Snake:
         self.tail.append((self.row, self.column))
         if len(self.tail) > self.length:
             # Note that, self.tail[-1] gives the position of the head.
-            # So, pop the first element instead of the last
+            # So, pop the first element instead of the last element.
             self.tail.pop(0)
 
     def update_reward(self):
@@ -319,7 +268,6 @@ class Snake:
 
 class Score:
     def __init__(self):
-        self.text = Text(base_string="Score: ", function=self.get)
         self.max_value = 0
         self.value = 0
 
@@ -350,7 +298,7 @@ class DQNAgent:
         model = Sequential()
         model.add(Dense(4, input_dim=self.state_size, activation='relu'))
         model.add(Dense(self.action_size, activation='linear'))
-        model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
+        model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
     def remember(self, state, action, reward, next_state, done):
@@ -391,27 +339,6 @@ class Keyboard:
                     print(Q.q_table)
                     pygame.quit()
                     quit()
-                if event.key == pygame.K_f:
-                    if FPS == 5:
-                        FPS = 999999
-                    else:
-                        FPS = 5
-                if event.key == pygame.K_RIGHT:
-                    snake.move(action="right")
-                elif event.key == pygame.K_LEFT:
-                    snake.move(action="left")
-                elif event.key == pygame.K_DOWN:
-                    if Q.epsilon > 0.1:
-                        Q.epsilon = round(Q.epsilon - 0.1, 1)
-                    else:
-                        Q.epsilon = 0.0
-                    print(f"--- Exploration rate: {Q.epsilon}")
-                elif event.key == pygame.K_UP:
-                    if Q.epsilon < 0.9:
-                        Q.epsilon = round(Q.epsilon + 0.1, 1)
-                    else:
-                        Q.epsilon = 1.0
-                    print(f"+++ Exploration rate: {Q.epsilon}")
 
 screen = Screen(resolution=(720, 600))
 keyboard = Keyboard()
@@ -423,13 +350,11 @@ snake.create()
 score = Score()
 Q = DQNAgent(state_size=11, action_size=4)
 start = datetime.now()
-n = 0
 
 while True:
     keyboard.update()
     _state_ = np.array((*check_nearby_cells(), *location_of_apple(), snake.direction), dtype=int)
     _state_ = np.expand_dims(_state_, axis=0)
-    print(_state_)
     _action_ = Q.act(_state_)
     snake.move(_action_)
     _reward_ = snake.reward
@@ -442,28 +367,6 @@ while True:
         snake.reset()
     screen.fill()
     screen.draw()
-    screen.FPS.text.show(screen.display, position=(0, 0))
-    score.text.show(screen.display, position=(200, 0))
-    if FPS == 999999:
-        if n > 250:
-            screen.update()
-            n = 0
-    else:
-        screen.update()
-    n += 1
+    screen.update()
     screen.FPS.set(FPS)
-    end = datetime.now()
-    difference = end - start
-    if difference.total_seconds() > 300:
-        start = end
-        if Q.epsilon > 0.2:
-            Q.epsilon = round(Q.epsilon - 0.1, 1)
-        else:
-            Q.epsilon = 0.0
-        print(f"Exploration rate: {Q.epsilon}")
-
-
-        
-
-
-        
+         
